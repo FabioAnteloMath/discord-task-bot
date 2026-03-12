@@ -286,6 +286,43 @@ class TasksCog(commands.Cog):
             ephemeral=True
         )
 
+    # --- Comando /enviar ---
+    @app_commands.command(name="enviar", description="Envia uma mensagem direta para membros mencionados")
+    @app_commands.describe(
+        membros="Mencione os membros (ex: @joao @maria)",
+        mensagem="Mensagem a ser enviada"
+    )
+    async def enviar(self, interaction: discord.Interaction, membros: str, mensagem: str):
+        import re
+        ids_membros = re.findall(r"<@!?(\\d+)>", membros)
+        ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
+        canal_fallback = interaction.channel
+        if not ids_membros:
+            await interaction.response.send_message(
+                "❌ Nenhum membro reconhecido. Use a @menção do Discord.", ephemeral=True
+            )
+            return
+        await interaction.response.send_message(
+            f"Enviando mensagem para: {' '.join(f'<@{mid}>' for mid in ids_membros)}",
+            ephemeral=True
+        )
+        erros = []
+        for mid in ids_membros:
+            try:
+                await _enviar_dm_com_retry(
+                    bot=interaction.client,
+                    user_id=mid,
+                    mensagem=mensagem,
+                    canal_fallback=canal_fallback,
+                )
+            except Exception as e:
+                erros.append(mid)
+        if erros:
+            await interaction.followup.send(
+                f"⚠️ Não foi possível notificar: {' '.join(f'<@{mid}>' for mid in erros)}.",
+                ephemeral=True
+            )
+
 
 # Função obrigatória chamada pelo bot.load_extension()
 # O discord.py procura por essa função ao carregar um Cog
