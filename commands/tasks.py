@@ -154,18 +154,9 @@ class TasksCog(commands.Cog):
                 "(selecione o nome da lista que aparece ao digitar @)."
             )
 
-        await interaction.response.send_message(
-            f"✅ Tarefa agendada!\n"
-            f"**ID:** `{nova_tarefa['id']}`\n"
-            f"**Descrição:** {descricao}\n"
-            f"**Data/Hora:** {data_hora.strftime('%d/%m/%Y às %H:%M')}"
-            f"{linha_membros}"
-            f"{aviso_membros}",
-            ephemeral=True
-        )
+        await interaction.response.defer(ephemeral=True)
 
         # Notifica imediatamente cada membro mencionado via DM
-        # Usa helper com retry automático em erros 503/5xx do servidor do Discord
         canal_fallback = interaction.client.get_channel(interaction.channel_id)
         erro_membros = []
         for mid in ids_membros:
@@ -185,11 +176,21 @@ class TasksCog(commands.Cog):
             except Exception as e:
                 erro_membros.append(mid)
                 logger.error(f"Erro ao notificar membro {mid}: {e}")
+
+        aviso_erro = ""
         if erro_membros:
-            await interaction.followup.send(
-                f"⚠️ Não foi possível notificar os membros: {' '.join(f'<@{mid}>' for mid in erro_membros)}.",
-                ephemeral=True
-            )
+            aviso_erro = f"\n\n\u26a0\ufe0f N\u00e3o foi poss\u00edvel notificar: {' '.join(f'<@{mid}>' for mid in erro_membros)}."
+
+        await interaction.followup.send(
+            f"\u2705 Tarefa agendada!\n"
+            f"**ID:** `{nova_tarefa['id']}`\n"
+            f"**Descri\u00e7\u00e3o:** {descricao}\n"
+            f"**Data/Hora:** {data_hora.strftime('%d/%m/%Y \u00e0s %H:%M')}"
+            f"{linha_membros}"
+            f"{aviso_membros}"
+            f"{aviso_erro}",
+            ephemeral=True
+        )
 
     # --- Comando /listar ---
     @app_commands.command(name="listar", description="Lista todas as suas tarefas agendadas")
@@ -296,16 +297,18 @@ class TasksCog(commands.Cog):
         import re
         ids_membros = re.findall(r"<@!?(\d+)>", membros)
         ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
-        canal_fallback = interaction.channel
+
         if not ids_membros:
             await interaction.response.send_message(
                 "❌ Nenhum membro reconhecido. Use a @menção do Discord.", ephemeral=True
             )
             return
-        await interaction.response.send_message(
-            f"Enviando mensagem para: {' '.join(f'<@{mid}>' for mid in ids_membros)}",
-            ephemeral=True
-        )
+
+        # defer() reconhece a interação imediatamente (obrigatório em < 3s)
+        # Evita erro 40060 quando retries de DM demoram mais que o timeout
+        await interaction.response.defer(ephemeral=True)
+
+        canal_fallback = interaction.channel
         erros = []
         for mid in ids_membros:
             try:
@@ -317,9 +320,16 @@ class TasksCog(commands.Cog):
                 )
             except Exception as e:
                 erros.append(mid)
+                logger.error(f"Erro ao enviar para {mid}: {e}")
+
         if erros:
             await interaction.followup.send(
-                f"⚠️ Não foi possível notificar: {' '.join(f'<@{mid}>' for mid in erros)}.",
+                f"⚠️ Enviado, mas não foi possível notificar: {' '.join(f'<@{mid}>' for mid in erros)}.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f"✅ Mensagem enviada para: {' '.join(f'<@{mid}>' for mid in ids_membros)}",
                 ephemeral=True
             )
 
