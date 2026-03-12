@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands, tasks
 from datetime import datetime
 from pathlib import Path
+from commands.tasks import _enviar_dm_com_retry
 
 logger = logging.getLogger("TaskBot.Scheduler")
 
@@ -90,23 +91,13 @@ class SchedulerCog(commands.Cog):
             save_tasks(task_list)
 
     async def _notificar(self, user_id: str, mensagem: str, canal_fallback, tarefa_id: str):
-        """Tenta enviar DM ao usuario. Se bloqueada, menciona no canal de fallback.
-        Separa a logica de notificacao do loop principal para evitar repeticao de codigo."""
-        try:
-            user = await self.bot.fetch_user(int(user_id))
-            await user.send(mensagem)
-            logger.info(f"[DM enviada] ID: {tarefa_id} -> Usuario: {user_id}")
-        except discord.Forbidden:
-            # DM bloqueada: tenta mencionar no canal onde a task foi criada
-            logger.warning(f"[DM bloqueada] ID: {tarefa_id} -> Usuario: {user_id} — tentando canal fallback")
-            if canal_fallback:
-                try:
-                    await canal_fallback.send(f"<@{user_id}> {mensagem}")
-                    logger.info(f"[Fallback canal] ID: {tarefa_id} -> Usuario: {user_id}")
-                except Exception as e:
-                    logger.error(f"[Fallback falhou] ID: {tarefa_id} -> {e}")
-        except Exception as e:
-            logger.error(f"[Erro notificacao] ID: {tarefa_id} -> Usuario: {user_id} -> {e}")
+        """Delega ao helper compartilhado com retry automático em erros 5xx."""
+        await _enviar_dm_com_retry(
+            bot=self.bot,
+            user_id=user_id,
+            mensagem=mensagem,
+            canal_fallback=canal_fallback,
+        )
 
     @check_reminders.before_loop
     async def before_check(self):

@@ -1,10 +1,48 @@
+import asyncio
 import json
+import logging
 import uuid
 import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger("TaskBot")
+
+
+async def _enviar_dm_com_retry(bot: discord.Client, user_id: str, mensagem: str,
+                               canal_fallback=None, tentativas: int = 3) -> None:
+    """Tenta enviar DM até `tentativas` vezes em erros 5xx (servidor do Discord).
+    Se DM estiver bloqueada (403), menciona no canal de fallback."""
+    for tentativa in range(1, tentativas + 1):
+        try:
+            user = await bot.fetch_user(int(user_id))
+            await user.send(mensagem)
+            logger.info(f"[DM enviada] -> Usuario: {user_id}")
+            return
+        except discord.Forbidden:
+            # Usuário bloqueou DMs — não adianta tentar de novo
+            logger.warning(f"[DM bloqueada] -> Usuario: {user_id} — tentando canal fallback")
+            if canal_fallback:
+                try:
+                    await canal_fallback.send(f"<@{user_id}> {mensagem}")
+                    logger.info(f"[Fallback canal] -> Usuario: {user_id}")
+                except Exception as e:
+                    logger.error(f"[Fallback canal falhou] -> {e}")
+            return
+        except discord.HTTPException as e:
+            # 503 / 5xx: erro temporário do servidor — espera e tenta de novo
+            if e.status >= 500 and tentativa < tentativas:
+                espera = 2 ** tentativa  # 2s, 4s, 8s
+                logger.warning(f"[DM erro {e.status}] Usuario: {user_id} — tentativa {tentativa}/{tentativas}, aguardando {espera}s")
+                await asyncio.sleep(espera)
+            else:
+                logger.error(f"[DM falhou] Usuario: {user_id} — {e.status}: {e.text}")
+                return
+        except Exception as e:
+            logger.error(f"[DM erro inesperado] Usuario: {user_id} — {e}")
+            return
 
 # Caminho absoluto para o arquivo de dados, relativo à raiz do projeto
 TASKS_FILE = Path("data/tasks.json")
@@ -108,35 +146,21 @@ class TasksCog(commands.Cog):
         )
 
         # Notifica imediatamente cada membro mencionado via DM
-        # Isso ocorre logo após salvar a tarefa, informando que foram incluídos
-        # Usamos interaction.client para acessar o bot de dentro do Cog
+        # Usa helper com retry automático em erros 503/5xx do servidor do Discord
+        canal_fallback = interaction.client.get_channel(interaction.channel_id)
         for mid in ids_membros:
-            try:
-                membro = await interaction.client.fetch_user(int(mid))
-                await membro.send(
+            await _enviar_dm_com_retry(
+                bot=interaction.client,
+                user_id=mid,
+                mensagem=(
                     f"\U0001f4cc **Voce foi incluido em uma tarefa!**\n"
                     f"**Criado por:** {interaction.user.display_name}\n"
                     f"**Tarefa:** {descricao}\n"
                     f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}\n"
                     f"Voce recebera um lembrete automatico no horario agendado."
-                )
-                import logging
-                logging.getLogger("TaskBot").info(f"[Notificacao criacao] Membro {mid} notificado via DM")
-            except discord.Forbidden:
-                # DM bloqueada — menciona no canal onde a task foi criada
-                try:
-                    canal = interaction.client.get_channel(interaction.channel_id)
-                    if canal:
-                        await canal.send(
-                            f"<@{mid}> voce foi incluido na tarefa **{descricao}** "
-                            f"agendada para {data_hora.strftime('%d/%m/%Y as %H:%M')} "
-                            f"por {interaction.user.display_name}."
-                        )
-                except Exception:
-                    pass
-            except Exception as e:
-                import logging
-                logging.getLogger("TaskBot").error(f"Erro ao notificar membro {mid} na criacao: {e}")
+                ),
+                canal_fallback=canal_fallback,
+            )
 
     # --- Comando /listar ---
     @app_commands.command(name="listar", description="Lista todas as suas tarefas agendadas")
