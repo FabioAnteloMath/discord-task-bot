@@ -80,9 +80,8 @@ class TasksCog(commands.Cog):
     )
     async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
         # Tenta converter a data e hora informadas para um objeto datetime
-        # ORDEM IMPORTA: tenta %y (2 dígitos) primeiro, pois %Y aceita qualquer
-        # quantidade de dígitos — "26" com %Y vira ano 26 d.C. (passado!),
-        # enquanto "26" com %y vira 2026 corretamente.
+        # ORDEM IMPORTA: %y (2 dígitos) antes de %Y, pois %Y aceita qualquer
+        # quantidade de dígitos — "26" com %Y vira ano 26 d.C. (passado!).
         # "2026" falha em %y (exige exatamente 2 dígitos) e cai no %Y.
         data_hora = None
         for fmt in ("%d/%m/%y %H:%M", "%d/%m/%Y %H:%M"):
@@ -116,6 +115,13 @@ class TasksCog(commands.Cog):
         # Remove o próprio criador da lista de membros para não enviar DM duplicada
         ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
 
+        # Log diagnóstico: mostra o que chegou no campo membros e o que foi extraído
+        # Útil para depurar casos em que o usuário não usou @menção correta
+        if membros:
+            logger.info(f"[/agendar] membros bruto='{membros}' | ids extraidos={ids_membros}")
+            if not ids_membros:
+                logger.warning("[/agendar] Campo membros preenchido mas nenhum ID extraido — usuario pode nao ter usado @mencao")
+
         tasks = load_tasks()
 
         # Cria o dicionário da nova tarefa
@@ -139,12 +145,22 @@ class TasksCog(commands.Cog):
             mencoes = " ".join(f"<@{mid}>" for mid in ids_membros)
             linha_membros = f"\n**Membros:** {mencoes}"
 
+        # Avisa quando campo membros foi preenchido mas nenhuma menção válida foi encontrada
+        aviso_membros = ""
+        if membros and not ids_membros:
+            aviso_membros = (
+                "\n\n⚠️ **Atenção:** nenhum membro foi reconhecido.\n"
+                "Para adicionar membros, use a @menção do Discord "
+                "(selecione o nome da lista que aparece ao digitar @)."
+            )
+
         await interaction.response.send_message(
             f"✅ Tarefa agendada!\n"
             f"**ID:** `{nova_tarefa['id']}`\n"
             f"**Descrição:** {descricao}\n"
             f"**Data/Hora:** {data_hora.strftime('%d/%m/%Y às %H:%M')}"
-            f"{linha_membros}",
+            f"{linha_membros}"
+            f"{aviso_membros}",
             ephemeral=True
         )
 
