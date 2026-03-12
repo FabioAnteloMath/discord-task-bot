@@ -167,18 +167,28 @@ class TasksCog(commands.Cog):
         # Notifica imediatamente cada membro mencionado via DM
         # Usa helper com retry automático em erros 503/5xx do servidor do Discord
         canal_fallback = interaction.client.get_channel(interaction.channel_id)
+        erro_membros = []
         for mid in ids_membros:
-            await _enviar_dm_com_retry(
-                bot=interaction.client,
-                user_id=mid,
-                mensagem=(
-                    f"\U0001f4cc **Voce foi incluido em uma tarefa!**\n"
-                    f"**Criado por:** {interaction.user.display_name}\n"
-                    f"**Tarefa:** {descricao}\n"
-                    f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}\n"
-                    f"Voce recebera um lembrete automatico no horario agendado."
-                ),
-                canal_fallback=canal_fallback,
+            try:
+                await _enviar_dm_com_retry(
+                    bot=interaction.client,
+                    user_id=mid,
+                    mensagem=(
+                        f"\U0001f4cc **Voce foi incluido em uma tarefa!**\n"
+                        f"**Criado por:** {interaction.user.display_name}\n"
+                        f"**Tarefa:** {descricao}\n"
+                        f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}\n"
+                        f"Voce recebera um lembrete automatico no horario agendado."
+                    ),
+                    canal_fallback=canal_fallback,
+                )
+            except Exception as e:
+                erro_membros.append(mid)
+                logger.error(f"Erro ao notificar membro {mid}: {e}")
+        if erro_membros:
+            await interaction.followup.send(
+                f"⚠️ Não foi possível notificar os membros: {' '.join(f'<@{mid}>' for mid in erro_membros)}.",
+                ephemeral=True
             )
 
     # --- Comando /listar ---
