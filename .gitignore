@@ -24,3 +24,7 @@ build/
 # Sistema operacional
 .DS_Store
 Thumbs.db
+
+# Replit — gerado automaticamente, não precisa ir ao GitHub
+.upm/
+replit.nix

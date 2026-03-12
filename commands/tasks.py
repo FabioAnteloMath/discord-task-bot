@@ -73,12 +73,14 @@ class TasksCog(commands.Cog):
 
         # Cria o dicionário da nova tarefa
         nova_tarefa = {
-            "id": str(uuid.uuid4())[:8],          # ID único de 8 caracteres (ex: "a1b2c3d4")
-            "user_id": str(interaction.user.id),  # ID numérico do usuário Discord
+            "id": str(uuid.uuid4())[:8],
+            "user_id": str(interaction.user.id),
+            "guild_id": str(interaction.guild_id),   # ID do servidor — usado como fallback se DM falhar
+            "channel_id": str(interaction.channel_id), # ID do canal — para mencionar no canal se DM bloqueada
             "descricao": descricao,
-            "data_hora": data_hora.isoformat(),   # Salva em formato ISO 8601 (ex: "2026-03-15T14:30:00")
-            "membros": ids_membros,               # Lista de IDs dos membros relacionados
-            "enviado": False                       # Flag para o scheduler saber se já enviou o lembrete
+            "data_hora": data_hora.isoformat(),
+            "membros": ids_membros,
+            "enviado": False
         }
 
         tasks.append(nova_tarefa)
@@ -98,6 +100,37 @@ class TasksCog(commands.Cog):
             f"{linha_membros}",
             ephemeral=True
         )
+
+        # Notifica imediatamente cada membro mencionado via DM
+        # Isso ocorre logo após salvar a tarefa, informando que foram incluídos
+        # Usamos interaction.client para acessar o bot de dentro do Cog
+        for mid in ids_membros:
+            try:
+                membro = await interaction.client.fetch_user(int(mid))
+                await membro.send(
+                    f"\U0001f4cc **Voce foi incluido em uma tarefa!**\n"
+                    f"**Criado por:** {interaction.user.display_name}\n"
+                    f"**Tarefa:** {descricao}\n"
+                    f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}\n"
+                    f"Voce recebera um lembrete automatico no horario agendado."
+                )
+                import logging
+                logging.getLogger("TaskBot").info(f"[Notificacao criacao] Membro {mid} notificado via DM")
+            except discord.Forbidden:
+                # DM bloqueada — menciona no canal onde a task foi criada
+                try:
+                    canal = interaction.client.get_channel(interaction.channel_id)
+                    if canal:
+                        await canal.send(
+                            f"<@{mid}> voce foi incluido na tarefa **{descricao}** "
+                            f"agendada para {data_hora.strftime('%d/%m/%Y as %H:%M')} "
+                            f"por {interaction.user.display_name}."
+                        )
+                except Exception:
+                    pass
+            except Exception as e:
+                import logging
+                logging.getLogger("TaskBot").error(f"Erro ao notificar membro {mid} na criacao: {e}")
 
     # --- Comando /listar ---
     @app_commands.command(name="listar", description="Lista todas as suas tarefas agendadas")

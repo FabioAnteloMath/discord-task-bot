@@ -1,8 +1,11 @@
 import json
+import logging
 import discord
 from discord.ext import commands, tasks
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger("TaskBot.Scheduler")
 
 # Mesmo caminho usado em commands/tasks.py
 TASKS_FILE = Path("data/tasks.json")
@@ -33,71 +36,77 @@ class SchedulerCog(commands.Cog):
         """Chamado automaticamente quando o Cog é removido. Cancela o loop."""
         self.check_reminders.cancel()
 
-    # @tasks.loop: decorator do discord.py que cria um loop assíncrono periódico
-    # minutes=1 significa que check_reminders() é executado a cada 1 minuto
     @tasks.loop(minutes=1)
     async def check_reminders(self):
         """Verifica todas as tarefas e envia DM para as que venceram."""
         agora = datetime.now()
         task_list = load_tasks()
-        houve_alteracao = False  # Flag para evitar salvar o JSON desnecessariamente
+        houve_alteracao = False
 
         for tarefa in task_list:
-            # Pula tarefas cujo lembrete já foi enviado
             if tarefa["enviado"]:
                 continue
 
-            # Converte a string ISO de volta para datetime para comparar
             data_hora = datetime.fromisoformat(tarefa["data_hora"])
 
-            # Se o horário atual é igual ou posterior ao agendado, envia o lembrete
             if agora >= data_hora:
+                # Tenta buscar o canal de fallback (caso DM seja bloqueada)
+                # Tarefas antigas podem nao ter channel_id — tratamos com try/except
                 try:
-                    # fetch_user() busca o perfil do usuário pelo ID numérico
-                    # Necessário para enviar DM (Direct Message) fora de um servidor
-                    user = await self.bot.fetch_user(int(tarefa["user_id"]))
-                    await user.send(
-                        f"⏰ **Lembrete!**\n"
+                    canal_fallback = self.bot.get_channel(int(tarefa["channel_id"]))
+                except (KeyError, ValueError, TypeError):
+                    canal_fallback = None
+
+                # --- Notifica o criador da tarefa ---
+                await self._notificar(
+                    user_id=tarefa["user_id"],
+                    mensagem=(
+                        f"\u23f0 **Lembrete!**\n"
                         f"**Tarefa:** {tarefa['descricao']}\n"
-                        f"**Agendado para:** {data_hora.strftime('%d/%m/%Y às %H:%M')}"
+                        f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}"
+                    ),
+                    canal_fallback=canal_fallback,
+                    tarefa_id=tarefa["id"]
+                )
+
+                # --- Notifica cada membro relacionado ---
+                for membro_id in tarefa.get("membros", []):
+                    await self._notificar(
+                        user_id=membro_id,
+                        mensagem=(
+                            f"\u23f0 **Lembrete de tarefa compartilhada!**\n"
+                            f"**Tarefa:** {tarefa['descricao']}\n"
+                            f"**Agendado para:** {data_hora.strftime('%d/%m/%Y as %H:%M')}"
+                        ),
+                        canal_fallback=canal_fallback,
+                        tarefa_id=tarefa["id"]
                     )
 
-                    # Notifica cada membro relacionado à tarefa
-                    # .get("membros", []) garante compatibilidade com tarefas antigas (sem esse campo)
-                    for membro_id in tarefa.get("membros", []):
-                        try:
-                            membro = await self.bot.fetch_user(int(membro_id))
-                            await membro.send(
-                                f"⏰ **Lembrete de tarefa compartilhada!**\n"
-                                f"**Tarefa:** {tarefa['descricao']}\n"
-                                f"**Agendado para:** {data_hora.strftime('%d/%m/%Y às %H:%M')}\n"
-                                f"**Criado por:** {user.display_name}"
-                            )
-                            print(f"[Lembrete membro] ID: {tarefa['id']} → Membro: {membro_id}")
-                        except discord.Forbidden:
-                            # Membro bloqueou DMs — continua para o próximo sem travar
-                            print(f"[DM bloqueada - membro] ID: {tarefa['id']} → Membro: {membro_id}")
-                        except Exception as e:
-                            print(f"[Erro membro] ID: {tarefa['id']} → Membro: {membro_id} → {e}")
+                tarefa["enviado"] = True
+                houve_alteracao = True
+                logger.info(f"[Lembrete concluido] ID: {tarefa['id']}")
 
-                    tarefa["enviado"] = True  # Marca para não enviar novamente
-                    houve_alteracao = True
-                    print(f"[Lembrete enviado] ID: {tarefa['id']} → Usuário: {tarefa['user_id']}")
-
-                except discord.Forbidden:
-                    # Erro 403: o usuário bloqueou DMs ou não está no servidor
-                    # Marcamos como enviado para não ficar tentando em loop
-                    tarefa["enviado"] = True
-                    houve_alteracao = True
-                    print(f"[DM bloqueada] ID: {tarefa['id']} → Usuário: {tarefa['user_id']}")
-
-                except Exception as e:
-                    # Captura qualquer outro erro inesperado sem travar o loop
-                    print(f"[Erro no lembrete] ID: {tarefa['id']} → {e}")
-
-        # Só salva o arquivo se houve alguma mudança (otimização de I/O)
         if houve_alteracao:
             save_tasks(task_list)
+
+    async def _notificar(self, user_id: str, mensagem: str, canal_fallback, tarefa_id: str):
+        """Tenta enviar DM ao usuario. Se bloqueada, menciona no canal de fallback.
+        Separa a logica de notificacao do loop principal para evitar repeticao de codigo."""
+        try:
+            user = await self.bot.fetch_user(int(user_id))
+            await user.send(mensagem)
+            logger.info(f"[DM enviada] ID: {tarefa_id} -> Usuario: {user_id}")
+        except discord.Forbidden:
+            # DM bloqueada: tenta mencionar no canal onde a task foi criada
+            logger.warning(f"[DM bloqueada] ID: {tarefa_id} -> Usuario: {user_id} — tentando canal fallback")
+            if canal_fallback:
+                try:
+                    await canal_fallback.send(f"<@{user_id}> {mensagem}")
+                    logger.info(f"[Fallback canal] ID: {tarefa_id} -> Usuario: {user_id}")
+                except Exception as e:
+                    logger.error(f"[Fallback falhou] ID: {tarefa_id} -> {e}")
+        except Exception as e:
+            logger.error(f"[Erro notificacao] ID: {tarefa_id} -> Usuario: {user_id} -> {e}")
 
     @check_reminders.before_loop
     async def before_check(self):
