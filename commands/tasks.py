@@ -80,9 +80,12 @@ class TasksCog(commands.Cog):
     )
     async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
         # Tenta converter a data e hora informadas para um objeto datetime
-        # Aceita tanto ano com 4 dígitos (20/03/2026) quanto 2 dígitos (20/03/26)
+        # ORDEM IMPORTA: tenta %y (2 dígitos) primeiro, pois %Y aceita qualquer
+        # quantidade de dígitos — "26" com %Y vira ano 26 d.C. (passado!),
+        # enquanto "26" com %y vira 2026 corretamente.
+        # "2026" falha em %y (exige exatamente 2 dígitos) e cai no %Y.
         data_hora = None
-        for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%y %H:%M"):
+        for fmt in ("%d/%m/%y %H:%M", "%d/%m/%Y %H:%M"):
             try:
                 data_hora = datetime.strptime(f"{data} {hora}", fmt)
                 break
