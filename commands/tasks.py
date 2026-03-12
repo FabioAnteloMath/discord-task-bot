@@ -79,6 +79,10 @@ class TasksCog(commands.Cog):
         membros="Mencione os membros relacionados (ex: @joao @maria) — opcional"
     )
     async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
+        # Protege contra evento duplicado (websocket atrasado que replaya após reconexão)
+        if interaction.response.is_done():
+            return
+
         # Tenta converter a data e hora informadas para um objeto datetime
         # ORDEM IMPORTA: %y (2 dígitos) antes de %Y, pois %Y aceita qualquer
         # quantidade de dígitos — "26" com %Y vira ano 26 d.C. (passado!).
@@ -294,6 +298,10 @@ class TasksCog(commands.Cog):
         mensagem="Mensagem a ser enviada"
     )
     async def enviar(self, interaction: discord.Interaction, membros: str, mensagem: str):
+        # Protege contra evento duplicado (websocket atrasado que replaya após reconexão)
+        if interaction.response.is_done():
+            return
+
         import re
         ids_membros = re.findall(r"<@!?(\d+)>", membros)
         ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]

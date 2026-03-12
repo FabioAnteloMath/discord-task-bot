@@ -65,6 +65,15 @@ async def main():
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         comando = interaction.command.name if interaction.command else "desconhecido"
         usuario = f"{interaction.user} (ID: {interaction.user.id})"
+
+        # Erro 40060: interação já foi reconhecida (evento duplicado após reconexão do websocket)
+        # Isso acontece quando o shard fica atrasado e replaya eventos já processados
+        # A interação original já foi tratada com sucesso — apenas logamos um aviso e ignoramos
+        original = getattr(error, 'original', error)
+        if isinstance(original, discord.HTTPException) and original.code == 40060:
+            logger.warning(f"Interacao duplicada ignorada (40060) para /{comando} | {usuario}")
+            return
+
         tb = traceback.format_exc()
         logger.error(
             f"Erro no comando /{comando} | Usuario: {usuario}\n"
