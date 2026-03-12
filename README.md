@@ -9,7 +9,7 @@ Permite agendar compromissos diretamente pelo chat e receber lembretes automáti
 
 | Comando | Descrição |
 |---|---|
-| `/agendar [data] [hora] [descrição]` | Agenda um novo compromisso |
+| `/agendar [data] [hora] [descrição] (membros)` | Agenda um novo compromisso (membros são opcionais) |
 | `/listar` | Lista todas as suas tarefas pendentes |
 | `/cancelar [id]` | Remove uma tarefa pelo ID |
 | `/editar [id] [nova descrição]` | Atualiza a descrição de uma tarefa |
@@ -138,7 +138,7 @@ Agendado para: 15/03/2026 às 14:30
 - [ ] Linguagem natural: *"agendar reunião amanhã às 15h"*
 - [ ] Migração para SQLite para suporte a maior volume de dados
 - [ ] Integração com Google Calendar
-- [ ] Adicionar membros relacionados a uma tarefa (ex: mencionar participantes de uma reunião)
+- [x] Adicionar membros relacionados a uma tarefa (ex: mencionar participantes de uma reunião)
 
 ---
 

@@ -37,9 +37,10 @@ class TasksCog(commands.Cog):
     @app_commands.describe(
         data="Data no formato DD/MM/AAAA (ex: 15/03/2026)",
         hora="Hora no formato HH:MM (ex: 14:30)",
-        descricao="Descrição do compromisso"
+        descricao="Descrição do compromisso",
+        membros="Mencione os membros relacionados (ex: @joao @maria) — opcional"
     )
-    async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str):
+    async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
         # Tenta converter a data e hora informadas para um objeto datetime
         # Se o formato estiver errado, ValueError é lançado e tratado pelo except
         try:
@@ -48,7 +49,7 @@ class TasksCog(commands.Cog):
             await interaction.response.send_message(
                 "❌ Formato inválido! Use: `/agendar DD/MM/AAAA HH:MM descrição`\n"
                 "Exemplo: `/agendar 15/03/2026 14:30 Reunião com equipe`",
-                ephemeral=True  # ephemeral=True: só o usuário que chamou vê a resposta
+                ephemeral=True
             )
             return
 
@@ -60,6 +61,14 @@ class TasksCog(commands.Cog):
             )
             return
 
+        # Extrai os IDs dos membros mencionados a partir do texto
+        # O Discord representa menções como <@ID> ou <@!ID> no texto — usamos re para extrair apenas o número
+        import re
+        ids_membros = re.findall(r"<@!?(\d+)>", membros)
+
+        # Remove o próprio criador da lista de membros para não enviar DM duplicada
+        ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
+
         tasks = load_tasks()
 
         # Cria o dicionário da nova tarefa
@@ -68,17 +77,25 @@ class TasksCog(commands.Cog):
             "user_id": str(interaction.user.id),  # ID numérico do usuário Discord
             "descricao": descricao,
             "data_hora": data_hora.isoformat(),   # Salva em formato ISO 8601 (ex: "2026-03-15T14:30:00")
+            "membros": ids_membros,               # Lista de IDs dos membros relacionados
             "enviado": False                       # Flag para o scheduler saber se já enviou o lembrete
         }
 
         tasks.append(nova_tarefa)
         save_tasks(tasks)
 
+        # Monta a linha de membros para exibir na confirmação
+        linha_membros = ""
+        if ids_membros:
+            mencoes = " ".join(f"<@{mid}>" for mid in ids_membros)
+            linha_membros = f"\n**Membros:** {mencoes}"
+
         await interaction.response.send_message(
             f"✅ Tarefa agendada!\n"
             f"**ID:** `{nova_tarefa['id']}`\n"
             f"**Descrição:** {descricao}\n"
-            f"**Data/Hora:** {data_hora.strftime('%d/%m/%Y às %H:%M')}",
+            f"**Data/Hora:** {data_hora.strftime('%d/%m/%Y às %H:%M')}"
+            f"{linha_membros}",
             ephemeral=True
         )
 
@@ -103,9 +120,19 @@ class TasksCog(commands.Cog):
         linhas = ["📋 **Suas tarefas agendadas:**\n"]
         for t in user_tasks:
             dt = datetime.fromisoformat(t["data_hora"])  # Converte a string ISO de volta para datetime
+
+            # Monta a linha de membros se existirem
+            # .get("membros", []) garante compatibilidade com tarefas antigas (sem o campo)
+            membros_ids = t.get("membros", [])
+            linha_membros = ""
+            if membros_ids:
+                mencoes = " ".join(f"<@{mid}>" for mid in membros_ids)
+                linha_membros = f"\n  👥 {mencoes}"
+
             linhas.append(
                 f"• `{t['id']}` — **{t['descricao']}**\n"
                 f"  🕐 {dt.strftime('%d/%m/%Y às %H:%M')}"
+                f"{linha_membros}"
             )
 
         await interaction.response.send_message("\n".join(linhas), ephemeral=True)

@@ -61,6 +61,25 @@ class SchedulerCog(commands.Cog):
                         f"**Tarefa:** {tarefa['descricao']}\n"
                         f"**Agendado para:** {data_hora.strftime('%d/%m/%Y às %H:%M')}"
                     )
+
+                    # Notifica cada membro relacionado à tarefa
+                    # .get("membros", []) garante compatibilidade com tarefas antigas (sem esse campo)
+                    for membro_id in tarefa.get("membros", []):
+                        try:
+                            membro = await self.bot.fetch_user(int(membro_id))
+                            await membro.send(
+                                f"⏰ **Lembrete de tarefa compartilhada!**\n"
+                                f"**Tarefa:** {tarefa['descricao']}\n"
+                                f"**Agendado para:** {data_hora.strftime('%d/%m/%Y às %H:%M')}\n"
+                                f"**Criado por:** {user.display_name}"
+                            )
+                            print(f"[Lembrete membro] ID: {tarefa['id']} → Membro: {membro_id}")
+                        except discord.Forbidden:
+                            # Membro bloqueou DMs — continua para o próximo sem travar
+                            print(f"[DM bloqueada - membro] ID: {tarefa['id']} → Membro: {membro_id}")
+                        except Exception as e:
+                            print(f"[Erro membro] ID: {tarefa['id']} → Membro: {membro_id} → {e}")
+
                     tarefa["enviado"] = True  # Marca para não enviar novamente
                     houve_alteracao = True
                     print(f"[Lembrete enviado] ID: {tarefa['id']} → Usuário: {tarefa['user_id']}")
