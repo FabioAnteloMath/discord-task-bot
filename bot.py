@@ -54,9 +54,12 @@ async def main():
 
     @bot.event
     async def on_ready():
-        await bot.tree.sync()
+        # Sync por guild é instantâneo — aparece imediatamente no servidor
+        # Sync global (sem guild) pode demorar até 1 hora para propagar
+        for guild in bot.guilds:
+            await bot.tree.sync(guild=guild)
+            logger.info(f"Comandos sincronizados no servidor: {guild.name} (ID: {guild.id})")
         logger.info(f"Bot conectado como: {bot.user} (ID: {bot.user.id})")
-        logger.info("Slash commands sincronizados!")
 
     @bot.tree.error
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

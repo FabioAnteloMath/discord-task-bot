@@ -294,7 +294,7 @@ class TasksCog(commands.Cog):
     )
     async def enviar(self, interaction: discord.Interaction, membros: str, mensagem: str):
         import re
-        ids_membros = re.findall(r"<@!?(\\d+)>", membros)
+        ids_membros = re.findall(r"<@!?(\d+)>", membros)
         ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
         canal_fallback = interaction.channel
         if not ids_membros:
