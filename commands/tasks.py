@@ -42,10 +42,16 @@ class TasksCog(commands.Cog):
     )
     async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
         # Tenta converter a data e hora informadas para um objeto datetime
-        # Se o formato estiver errado, ValueError é lançado e tratado pelo except
-        try:
-            data_hora = datetime.strptime(f"{data} {hora}", "%d/%m/%Y %H:%M")
-        except ValueError:
+        # Aceita tanto ano com 4 dígitos (20/03/2026) quanto 2 dígitos (20/03/26)
+        data_hora = None
+        for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%y %H:%M"):
+            try:
+                data_hora = datetime.strptime(f"{data} {hora}", fmt)
+                break
+            except ValueError:
+                continue
+
+        if data_hora is None:
             await interaction.response.send_message(
                 "❌ Formato inválido! Use: `/agendar DD/MM/AAAA HH:MM descrição`\n"
                 "Exemplo: `/agendar 15/03/2026 14:30 Reunião com equipe`",
