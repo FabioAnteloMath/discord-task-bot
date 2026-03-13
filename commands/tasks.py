@@ -68,7 +68,7 @@ class TasksCog(commands.Cog):
     Um Cog é uma classe que agrupa comandos relacionados em um módulo separado."""
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot  # Guarda referência ao bot para uso nos métodos
+        self.bot = bot
 
     # --- Comando /agendar ---
     @app_commands.command(name="agendar", description="Agenda um novo compromisso ou tarefa")
@@ -79,14 +79,9 @@ class TasksCog(commands.Cog):
         membros="Mencione os membros relacionados (ex: @joao @maria) — opcional"
     )
     async def agendar(self, interaction: discord.Interaction, data: str, hora: str, descricao: str, membros: str = ""):
-        # Protege contra evento duplicado (websocket atrasado que replaya após reconexão)
         if interaction.response.is_done():
             return
 
-        # Tenta converter a data e hora informadas para um objeto datetime
-        # ORDEM IMPORTA: %y (2 dígitos) antes de %Y, pois %Y aceita qualquer
-        # quantidade de dígitos — "26" com %Y vira ano 26 d.C. (passado!).
-        # "2026" falha em %y (exige exatamente 2 dígitos) e cai no %Y.
         data_hora = None
         for fmt in ("%d/%m/%y %H:%M", "%d/%m/%Y %H:%M"):
             try:
@@ -111,16 +106,10 @@ class TasksCog(commands.Cog):
             )
             return
 
-        # Extrai os IDs dos membros mencionados a partir do texto
-        # O Discord representa menções como <@ID> ou <@!ID> no texto — usamos re para extrair apenas o número
         import re
         ids_membros = re.findall(r"<@!?(\d+)>", membros)
-
-        # Remove o próprio criador da lista de membros para não enviar DM duplicada
         ids_membros = [mid for mid in ids_membros if mid != str(interaction.user.id)]
 
-        # Log diagnóstico: mostra o que chegou no campo membros e o que foi extraído
-        # Útil para depurar casos em que o usuário não usou @menção correta
         if membros:
             logger.info(f"[/agendar] membros bruto='{membros}' | ids extraidos={ids_membros}")
             if not ids_membros:
@@ -216,10 +205,7 @@ class TasksCog(commands.Cog):
         # Monta a mensagem com todas as tarefas encontradas
         linhas = ["📋 **Suas tarefas agendadas:**\n"]
         for t in user_tasks:
-            dt = datetime.fromisoformat(t["data_hora"])  # Converte a string ISO de volta para datetime
-
-            # Monta a linha de membros se existirem
-            # .get("membros", []) garante compatibilidade com tarefas antigas (sem o campo)
+            dt = datetime.fromisoformat(t["data_hora"]) 
             membros_ids = t.get("membros", [])
             linha_membros = ""
             if membros_ids:
@@ -240,9 +226,7 @@ class TasksCog(commands.Cog):
     async def cancelar(self, interaction: discord.Interaction, id: str):
         tasks = load_tasks()
 
-        # next() busca o primeiro item que corresponda à condição, ou retorna None
-        # Verifica tanto o ID quanto o user_id para segurança (ninguém apaga tarefa alheia)
-        tarefa = next(
+       tarefa = next(
             (t for t in tasks if t["id"] == id and t["user_id"] == str(interaction.user.id)),
             None
         )
@@ -281,7 +265,7 @@ class TasksCog(commands.Cog):
             return
 
         descricao_antiga = tarefa["descricao"]
-        tarefa["descricao"] = nova_descricao  # Atualiza diretamente no dicionário (que é referência na lista)
+        tarefa["descricao"] = nova_descricao  
         save_tasks(tasks)
 
         await interaction.response.send_message(
@@ -298,8 +282,7 @@ class TasksCog(commands.Cog):
         mensagem="Mensagem a ser enviada"
     )
     async def enviar(self, interaction: discord.Interaction, membros: str, mensagem: str):
-        # Protege contra evento duplicado (websocket atrasado que replaya após reconexão)
-        if interaction.response.is_done():
+         if interaction.response.is_done():
             return
 
         import re
@@ -312,9 +295,7 @@ class TasksCog(commands.Cog):
             )
             return
 
-        # defer() reconhece a interação imediatamente (obrigatório em < 3s)
-        # Evita erro 40060 quando retries de DM demoram mais que o timeout
-        await interaction.response.defer(ephemeral=True)
+               await interaction.response.defer(ephemeral=True)
 
         canal_fallback = interaction.channel
         erros = []
@@ -341,8 +322,5 @@ class TasksCog(commands.Cog):
                 ephemeral=True
             )
 
-
-# Função obrigatória chamada pelo bot.load_extension()
-# O discord.py procura por essa função ao carregar um Cog
 async def setup(bot: commands.Bot):
     await bot.add_cog(TasksCog(bot))

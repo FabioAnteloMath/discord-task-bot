@@ -17,17 +17,12 @@ logger = logging.getLogger("TaskBot")
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
-
-# REPL_ID é uma variável de ambiente que só existe dentro do Replit
-# Usamos isso para saber onde o bot está rodando
 ON_REPLIT = bool(os.getenv('REPL_ID'))
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-# No Replit, o bot precisa de um servidor HTTP ativo para não "dormir"
-# O plano gratuito encerra processos inativos — o keep_alive resolve isso
 if ON_REPLIT:
     from keep_alive import keep_alive
     keep_alive()
@@ -36,11 +31,8 @@ if ON_REPLIT:
 
 async def main():
     if ON_REPLIT:
-        # Replit roda em Linux com SSL correto — não precisa de connector especial
         connector = None
     else:
-        # Windows local com antivírus/firewall que intercepta TLS
-        # ssl=False desativa verificação — seguro apenas em desenvolvimento local
         connector = aiohttp.TCPConnector(ssl=False)
 
     bot = commands.Bot(command_prefix="!", intents=intents, connector=connector)
@@ -54,8 +46,6 @@ async def main():
 
     @bot.event
     async def on_ready():
-        # Sync por guild é instantâneo — aparece imediatamente no servidor
-        # Sync global (sem guild) pode demorar até 1 hora para propagar
         for guild in bot.guilds:
             await bot.tree.sync(guild=guild)
             logger.info(f"Comandos sincronizados no servidor: {guild.name} (ID: {guild.id})")
@@ -66,10 +56,7 @@ async def main():
         comando = interaction.command.name if interaction.command else "desconhecido"
         usuario = f"{interaction.user} (ID: {interaction.user.id})"
 
-        # Erro 40060: interação já foi reconhecida (evento duplicado após reconexão do websocket)
-        # Isso acontece quando o shard fica atrasado e replaya eventos já processados
-        # A interação original já foi tratada com sucesso — apenas logamos um aviso e ignoramos
-        original = getattr(error, 'original', error)
+         original = getattr(error, 'original', error)
         if isinstance(original, discord.HTTPException) and original.code == 40060:
             logger.warning(f"Interacao duplicada ignorada (40060) para /{comando} | {usuario}")
             return

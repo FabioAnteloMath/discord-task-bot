@@ -13,6 +13,7 @@ Permite agendar compromissos diretamente pelo chat e receber lembretes automáti
 | `/listar` | Lista todas as suas tarefas pendentes |
 | `/cancelar [id]` | Remove uma tarefa pelo ID |
 | `/editar [id] [nova descrição]` | Atualiza a descrição de uma tarefa |
+| `/enviar [membros] [mensagem]` | Envia mensagem direta para membros mencionados |
 
 ---
 
@@ -22,6 +23,9 @@ Permite agendar compromissos diretamente pelo chat e receber lembretes automáti
 - **discord.py 2.x** — biblioteca principal para bots Discord
 - **python-dotenv** — carregamento seguro do token via `.env`
 - **JSON** — armazenamento local das tarefas
+- **aiohttp** — requisições HTTP assíncronas (necessário para discord.py)
+- **truststore** — (opcional) para corrigir problemas de SSL/TLS no Windows
+- **keep_alive.py** — servidor HTTP mínimo para manter o bot online no Replit
 
 ---
 
@@ -38,6 +42,8 @@ discord-task-bot/
 ├── utils/
 │   ├── __init__.py
 │   └── scheduler.py        # Loop de verificação e envio de lembretes
+├── keep_alive.py           # Servidor HTTP para Replit (evita bot offline)
+├── .replit                 # Configuração de execução automática no Replit
 ├── .env                    # Token do bot (nunca subir ao GitHub)
 ├── .gitignore
 ├── requirements.txt
@@ -65,10 +71,17 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
+> 💡 Se rodar no Windows e tiver problemas de SSL/TLS (ex: erro ao conectar no Discord), instale o pacote `truststore`:
+> ```bash
+> pip install truststore
+> ```
+> O bot já detecta e usa automaticamente se necessário.
+
 ### 3. Instale as dependências
 ```bash
 pip install -r requirements.txt
 ```
+> Inclui: `discord.py`, `python-dotenv`, `aiohttp`, (opcional: `truststore`)
 
 ### 4. Configure o token
 
@@ -84,6 +97,7 @@ TOKEN=seu_token_do_discord_aqui
 ```bash
 python bot.py
 ```
+> 💡 No Replit, o arquivo `keep_alive.py` é usado para manter o bot online 24/7. O arquivo `.replit` garante execução automática.
 
 Se tudo estiver correto, você verá:
 ```
@@ -119,7 +133,9 @@ Agendado para: 15/03/2026 às 14:30
 
 1. Importe o repositório GitHub no [Replit](https://replit.com)
 2. Em **Secrets**, adicione a variável `TOKEN` com o valor do seu token
-3. Clique em **Run** — o bot ficará online 24/7
+3. O arquivo `keep_alive.py` inicia um servidor HTTP para evitar que o bot "durma".
+4. O arquivo `.replit` garante que o comando correto seja executado.
+5. Clique em **Run** — o bot ficará online 24/7
 
 ---
 
@@ -128,6 +144,7 @@ Agendado para: 15/03/2026 às 14:30
 - O token do bot fica exclusivamente no arquivo `.env` (local) ou nos Secrets do Replit (nuvem)
 - O arquivo `.env` e `data/tasks.json` estão listados no `.gitignore` e nunca são enviados ao GitHub
 - Cada usuário só consegue ver, editar e cancelar as **suas próprias** tarefas
+- O bot detecta ambiente (Replit ou local) e ajusta configurações de SSL/TLS automaticamente
 
 ---
 

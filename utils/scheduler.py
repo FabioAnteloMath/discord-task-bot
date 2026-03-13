@@ -31,7 +31,7 @@ class SchedulerCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.check_reminders.start()  # Inicia o loop assim que o Cog é carregado
+        self.check_reminders.start()
 
     def cog_unload(self):
         """Chamado automaticamente quando o Cog é removido. Cancela o loop."""
@@ -51,8 +51,6 @@ class SchedulerCog(commands.Cog):
             data_hora = datetime.fromisoformat(tarefa["data_hora"])
 
             if agora >= data_hora:
-                # Tenta buscar o canal de fallback (caso DM seja bloqueada)
-                # Tarefas antigas podem nao ter channel_id — tratamos com try/except
                 try:
                     canal_fallback = self.bot.get_channel(int(tarefa["channel_id"]))
                 except (KeyError, ValueError, TypeError):
